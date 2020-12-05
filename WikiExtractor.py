@@ -196,6 +196,7 @@ options = SimpleNamespace(
     ignored_tag_patterns = [],
     filter_category_include = set(),
     filter_category_exclude = set(),
+    filter_id_include = set(),
 
     log_file = None,
 
@@ -222,7 +223,7 @@ g_page_total = 0
 g_page_articl_total=0
 g_page_articl_used_total=0
 # page filtering logic -- remove templates, undesired xml namespaces, and disambiguation pages
-def keepPage(ns, catSet, page):
+def keepPage(id, ns, catSet, page):
     global g_page_articl_total,g_page_total,g_page_articl_used_total
     g_page_total += 1
     if ns != '0':               # Aritcle
@@ -238,6 +239,9 @@ def keepPage(ns, catSet, page):
         return False
     if len(options.filter_category_exclude) > 0 and len(options.filter_category_exclude & catSet)>0:
         logging.debug("***Exclude  " + str(catSet))
+        return False
+    if len(options.filter_id_include) > 0 and (id not in options.filter_id_include):
+        logging.debug("***Exclude  " + str(id))
         return False
     g_page_articl_used_total += 1
     return True
@@ -2638,7 +2642,7 @@ def compact(text):
                     bullet = 'BULLET::::%d. ' % listCount[i - 1] if n == '#' else 'BULLET::::- '
                     page.append('{0:{1}s}'.format(bullet, len(listLevel)) + line)
                 elif options.toHTML:
-                    if n not in listItem: 
+                    if n not in listItem:
                         n = '*'
                     page.append(listItem[n] % line)
         elif len(listLevel):
@@ -2983,7 +2987,7 @@ def process_dump(input_file, template_file, out_file, file_size, file_compress,
     page_num = 0
     for page_data in pages_from(input):
         id, revid, title, ns, catSet, page = page_data
-        if keepPage(ns, catSet, page):
+        if keepPage(id, ns, catSet, page):
             # slow down
             delay = 0
             if spool_length.value > max_spool_length:
@@ -3193,6 +3197,8 @@ def main():
     groupP.add_argument("--filter_category",
                         help="specify the file that listing the Categories you want to include or exclude. One line for"
                              " one category. starting with: 1) '#' comment, ignored; 2) '^' exclude; Note: excluding has higher priority than including")
+    groupP.add_argument("--filter_id",
+                        help="specify the file that listing the ID you want to include")
     args = parser.parse_args()
 
     options.keepLinks = args.links
@@ -3300,6 +3306,16 @@ def main():
             logging.info(str(options.filter_category_exclude))
             logging.info("Including categories:")
             logging.info(str(len(options.filter_category_include)))
+
+    filter_id = args.filter_id
+    if filter_id is not None and len(filter_id) > 0:
+        with open(filter_id) as f:
+            for line in f.readlines():
+                try:
+                    line = str(line.strip())
+                    options.filter_id_include.add(line)
+                except Exception as e:
+                    print(f"Cannot include id {line}: {e}")
 
     process_dump(input_file, args.templates, output_path, file_size,
                  args.compress, args.processes)
